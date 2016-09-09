@@ -47,7 +47,7 @@ angular.module('offClick').directive('offClick', ["$rootScope", "$parse", "OffCl
         }
         var target = event.target || event.srcElement;
         angular.forEach(listeners, function (listener, i) {
-            var filters = [];
+            var filters = OffClickFilterCache['*'] || [];
             if (listener.elm.id && listener.elm.id !== '') {
                 if (OffClickFilterCache['#' + listener.elm.id]) filters = filters.concat(OffClickFilterCache['#' + listener.elm.id]);
             }
@@ -75,31 +75,31 @@ angular.module('offClick').directive('offClick', ["$rootScope", "$parse", "OffCl
         compile: function compile(elem, attrs) {
             var fn = $parse(attrs.offClick);
 
-            var elmId = id++;
-            var removeWatcher = void 0;
-
-            var on = function on() {
-                listeners[elmId] = {
-                    elm: element[0],
-                    cb: fn,
-                    scope: scope
-                };
-            };
-
-            var off = function off() {
-                listeners[elmId] = null;
-                delete listeners[elmId];
-            };
-
-            if (attrs.offClickIf) {
-                removeWatcher = $rootScope.$watch(function () {
-                    return $parse(attrs.offClickIf)(scope);
-                }, function (newVal) {
-                    newVal && on() || !newVal && off();
-                });
-            } else on();
-
             return function (scope, element) {
+                var elmId = id++;
+                var removeWatcher = void 0;
+
+                var on = function on() {
+                    listeners[elmId] = {
+                        elm: element[0],
+                        cb: fn,
+                        scope: scope
+                    };
+                };
+
+                var off = function off() {
+                    listeners[elmId] = null;
+                    delete listeners[elmId];
+                };
+
+                if (attrs.offClickIf) {
+                    removeWatcher = $rootScope.$watch(function () {
+                        return $parse(attrs.offClickIf)(scope);
+                    }, function (newVal) {
+                        newVal && on() || !newVal && off();
+                    });
+                } else on();
+
                 scope.$on('$destroy', function () {
                     off();
                     if (removeWatcher) {
@@ -111,35 +111,38 @@ angular.module('offClick').directive('offClick', ["$rootScope", "$parse", "OffCl
         }
     };
 }]);
+
 angular.module('offClick').directive('offClickFilter', ["OffClickFilterCache", "$parse", function (OffClickFilterCache, $parse) {
     var filters = void 0;
-    var addFiltersToCache = function addFiltersToCache(filters) {
-        filters.forEach(function (filter) {
-            OffClickFilterCache[filter] ? OffClickFilterCache[filter].push(elem[0]) : OffClickFilterCache[filter] = [elem[0]];
-        });
-    };
+
     return {
         restrict: 'A',
         compile: function compile(elem, attrs) {
-            addFiltersToCache($parse(attrs.OffClickFilterCache).split(',').map(function (x) {
-                return x.trim();
-            }));
             return function (scope, element) {
+                filters = $parse(attrs.offClickFilter)(scope).split(',').map(function (x) {
+                    return x.trim();
+                });
+
+                filters.forEach(function (filter) {
+                    OffClickFilterCache[filter] ? OffClickFilterCache[filter].push(element[0]) : OffClickFilterCache[filter] = [element[0]];
+                });
+
                 scope.$on('$destroy', function () {
-                    element = null;
                     filters.forEach(function (filter) {
                         if (OffClickFilterCache[filter].length > 1) {
-                            OffClickFilterCache[filter].splice(OffClickFilterCache[filter].indexOf(elem[0]), 1);
+                            OffClickFilterCache[filter].splice(OffClickFilterCache[filter].indexOf(element[0]), 1);
                         } else {
                             OffClickFilterCache[filter] = null;
                             delete OffClickFilterCache[filter];
                         }
                     });
+                    element = null;
                 });
             };
         }
     };
 }]);
+
 angular.module('offClick').factory('OffClickFilterCache', function () {
     var filterCache = {};
     return filterCache;
